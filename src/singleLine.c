@@ -75,7 +75,9 @@ MODE parseUserInput(int argc, char *argv[])
     return INVALID;
 }
 
-void findLongestLine(Bitmap *bitmap, int start_index[], int end_index[], bool search_horizonally)
+int findLongestLine(Bitmap *bitmap, int start_index[], 
+                    int end_index[], bool search_horizonally, int *start_pointer,
+                    int *end_pointer)
 {
     int current_length = 0;
     int longest_length = 0;
@@ -84,13 +86,10 @@ void findLongestLine(Bitmap *bitmap, int start_index[], int end_index[], bool se
     int longest_end_pos[2] = {-1, -1};
     int start_pos[2] = {-1, -1};
 
-
     int inner_start = search_horizonally ? start_index[1] : start_index[0];
     int inner_end = search_horizonally ? end_index[1] : end_index[0];
     int outer_start = search_horizonally ? start_index[0] : start_index[1];
     int outer_end = search_horizonally ? end_index[0] : end_index[1];
-
-
 
     for (int i = outer_start; i <= outer_end; i++)
     {
@@ -118,9 +117,8 @@ void findLongestLine(Bitmap *bitmap, int start_index[], int end_index[], bool se
             }
             else
             {
-                if (found_start & (current_length > longest_length))
+                if (found_start && (current_length > longest_length))
                 {
-
                     longest_length = current_length;
                     longest_start_pos[0] = start_pos[0];
                     longest_start_pos[1] = start_pos[1];
@@ -131,9 +129,8 @@ void findLongestLine(Bitmap *bitmap, int start_index[], int end_index[], bool se
                 current_length = 0;
             }
         }
-        if (found_start & (current_length > longest_length))
+        if (found_start && (current_length > longest_length))
         {
-
             longest_length = current_length;
             longest_start_pos[0] = start_pos[0];
             longest_start_pos[1] = start_pos[1];
@@ -141,13 +138,61 @@ void findLongestLine(Bitmap *bitmap, int start_index[], int end_index[], bool se
             longest_end_pos[1] = end_pos[1];
         }
     }
-    printf("Longest line has length %d, starting at (%d, %d) and ending at (%d, %d).\n", longest_length, longest_start_pos[0], longest_start_pos[1], longest_end_pos[0], longest_end_pos[1]);
+
+    // Set start and end pointers before returning
+    start_pointer[0] = longest_start_pos[0];
+    start_pointer[1] = longest_start_pos[1];
+    end_pointer[0] = longest_end_pos[0];
+    end_pointer[1] = longest_end_pos[1];
+
+    return longest_length;
 }
+
 
 void findLongestLineBitmap(Bitmap *bitmap, int *start_position, int *end_position, bool search_horizonally)
 {
+    int longest_length = 0;
+    int current_length = 0;
+    int start_point[2] = {-1, -1};
+    int end_point[2] = {-1, -1};
+    int current_start_pos[2];
+    int current_end_pos[2];
 
+    int outer_loop = search_horizonally ? bitmap->rows : bitmap->columns;
+
+    for (int i = 0; i < outer_loop; i++)
+    {
+        if (search_horizonally)
+        {
+            start_point[0] = i;
+            start_point[1] = 0;
+            end_point[0] = i;
+            end_point[1] = bitmap->columns - 1;
+        }
+        else
+        {
+            start_point[0] = 0;
+            start_point[1] = i;
+            end_point[0] = bitmap->rows - 1;
+            end_point[1] = i;
+        }
+
+        current_length = findLongestLine(bitmap, start_point, end_point, search_horizonally, current_start_pos, current_end_pos);
+
+        if (current_length > longest_length)
+        {
+            longest_length = current_length;
+            start_position[0] = current_start_pos[0];
+            start_position[1] = current_start_pos[1];
+            end_position[0] = current_end_pos[0];
+            end_position[1] = current_end_pos[1];
+        }
+    }
+
+    printf("Longest line is %d, starting at (%d, %d) and ending at (%d, %d).\n",
+           longest_length, start_position[0], start_position[1], end_position[0], end_position[1]);
 }
+
 
 void findHLINE(Bitmap *bitmap, int *start_position, int *end_position)
 {
@@ -219,6 +264,11 @@ bool alloc_bitmap_data(Bitmap *bitmap)
         }
     }
     return true;
+}
+
+void findSquare(Bitmap *bitmap, int *start_index, int *end_index)
+{
+
 }
 
 /**
@@ -304,8 +354,8 @@ int main(int argc, char *argv[])
     case HLINE:
         bitmap = init_bitmap(argv[2]);
         findHLINE(bitmap, start_position, end_position);
-        printf("Start position: (%d, %d)\n", start_position[0], start_position[1]);
-        printf("End position: (%d, %d)\n", end_position[0], end_position[1]);
+       // printf("Start position: (%d, %d)\n", start_position[0], start_position[1]);
+       // printf("End position: (%d, %d)\n", end_position[0], end_position[1]);
         break;
     case VLINE:
         bitmap = init_bitmap(argv[2]);
@@ -328,8 +378,10 @@ int main(int argc, char *argv[])
         printf("Usage: figsearch [mode] [filename]\n");
         break;
     }
+    if(bitmap){
+        free_bitmap(bitmap); // Free the allocated memory
+    }
 
-    free_bitmap(bitmap); // Free the allocated memory
 
     return 0;
 }

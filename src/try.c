@@ -319,8 +319,11 @@ int main(int argc, char *argv[])
         printf("Usage: figsearch [mode] [filename]\n");
         break;
     }
+    if(bitmap){
+        free_bitmap(bitmap); // Free the allocated memory
+    }
 
-    free_bitmap(bitmap); // Free the allocated memory
+    
 
     return 0;
 }

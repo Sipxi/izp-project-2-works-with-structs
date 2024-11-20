@@ -142,7 +142,6 @@ int findLongestLine(Bitmap *bitmap, int start_index[],
 
     // Set start and end pointers before returning
     found_start_pos[0] = longest_start_pos[0];
-    printf("Found start pos: %d, %d\n", found_start_pos[0], longest_start_pos[0]);
     found_start_pos[1] = longest_start_pos[1];
     found_end_pos[0] = longest_end_pos[0];
     found_end_pos[1] = longest_end_pos[1];
@@ -153,7 +152,7 @@ int findLongestLine(Bitmap *bitmap, int start_index[],
 
 void findLongestLineBitmap(Bitmap *bitmap, int *start_position, int *end_position, bool search_horizonally)
 {
-    int longest_len = -2;
+    int longest_len = 0;
     int current_len = 0;
     int start_point[2] = {-1, -1};
     int end_point[2] = {-1, -1};
@@ -205,90 +204,6 @@ void findVLINE(Bitmap *bitmap, int *start_position, int *end_position)
 {
     findLongestLineBitmap(bitmap, start_position, end_position, false);
 }
-
-void findSQUARE(Bitmap *bitmap, int *start_position, int *end_position) {
-    if (bitmap == NULL || bitmap->rows <= 0 || bitmap->columns <= 0) {
-        printf("Error: Invalid bitmap dimensions.\n");
-        return;
-    }
-
-    int start_pos[2], end_pos[2];
-    int current_len = 0, next_len = 0;
-    int temp_pos[2];
-
-    // Main loop over rows
-    for (int i = 0; i < bitmap->rows; i++) {
-        start_pos[0] = i;
-        start_pos[1] = 0;
-        end_pos[0] = i;
-        end_pos[1] = bitmap->columns - 1;
-
-        // Ensure we're within the bitmap boundaries
-        if (start_pos[1] >= bitmap->columns || end_pos[1] < 0) continue;
-
-        // Try to find the first horizontal line
-        current_len = findLongestLine(bitmap, start_pos, end_pos, true, start_position, end_position);
-
-        // If no valid line is found, skip to the next row
-        if (current_len == -1) {
-            continue;
-        }
-
-        // If a valid line is found, proceed with the rest of the logic
-        if (start_position[0] != -1) {
-
-            // Check the boundaries before proceeding to the next search
-            if (start_pos[0] >= bitmap->rows || end_pos[1] >= bitmap->columns) continue;
-
-            // Find the next vertical line from the end of the previous one
-            start_pos[0] = end_pos[0];
-            start_pos[1] = end_pos[1];
-            end_pos[0] += current_len - 1;
-
-            // Ensure end_pos is within bounds
-            if (end_pos[0] >= bitmap->rows) end_pos[0] = bitmap->rows - 1;
-
-            next_len = findLongestLine(bitmap, start_pos, end_pos, false, start_position, end_position);
-            if (next_len == -1) continue;
-            temp_pos[0] = end_position[0];
-            temp_pos[1] = end_position[1];
-
-            // Find the second horizontal line
-            start_pos[0] = end_pos[0];
-            start_pos[1] = end_pos[1] - (current_len - 1);
-
-            // Ensure that the start_pos is valid for the horizontal line search
-            if (start_pos[1] < 0) continue;
-
-            next_len = findLongestLine(bitmap, start_pos, end_pos, true, start_position, end_position);
-            if (next_len == -1) continue;
-
-            // Finally, go back to the start and find the last vertical line
-            end_pos[0] = start_position[0];
-            end_pos[1] = start_position[1];
-            start_pos[0] = i;
-            start_pos[1] = 0;
-
-            // Ensure that the last vertical search stays within bounds
-            if (start_pos[0] >= bitmap->rows || end_pos[0] >= bitmap->rows) continue;
-
-            next_len = findLongestLine(bitmap, start_pos, end_pos, false, start_position, end_position);
-            if (next_len == -1) continue;
-
-            // At this point, we have found the square. Print top-left and bottom-right positions.
-            if (current_len > 0 && next_len > 0) {
-                end_position[0] = temp_pos[0];
-                end_position[1] = temp_pos[1];
-                printf("Top-left position: (%d, %d)\n", start_position[0], start_position[1]);
-                printf("Bottom-right position: (%d, %d)\n", end_position[0], end_position[1]);
-                return;  // Exit the function once the square is found
-            }
-        }
-    }
-
-    printf("No square found.\n");
-}
-
 
 /**
  * Frees the memory allocated for a bitmap
@@ -352,8 +267,24 @@ bool alloc_bitmap_data(Bitmap *bitmap)
     return true;
 }
 
-void findSquare(Bitmap *bitmap, int *start_index, int *end_index)
+void findSquare(Bitmap *bitmap, int *found_start_index, int *found_end_index)
 {
+    printf("Find related to horizontal");
+    for (int i = 0; i < bitmap->columns; i++){
+        for (int j = i; j < bitmap->columns; j++){
+            printf("%d", bitmap->data[0][j]);
+        }
+        printf("\n");
+    }
+    printf("Find related to vertical\n");
+
+    for (int i = 0; i < bitmap->rows; i++){
+        for (int j = i; j < bitmap->rows; j++){
+            printf("%d", bitmap->data[j][0]);
+        }
+        printf("\n");
+    }
+
 
 }
 
@@ -451,7 +382,7 @@ int main(int argc, char *argv[])
         break;
     case SQUARE:
         bitmap = init_bitmap(argv[2]);
-        findSQUARE(bitmap, start_position, end_position);
+        findSquare(bitmap, start_position, end_position);
         break;
     case TEST:
         bitmap = init_bitmap(argv[2]);

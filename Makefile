@@ -8,7 +8,7 @@
 
 # Compiler and flags
 CC 			= gcc #! CHANGE BASED ON YOUR COMPLIER
-CFLAGS 		= -std=c11 -Wextra -Werror
+CFLAGS 		= -std=c11 -Wextra
 
 # Executable names
 EXEC        = figsearch

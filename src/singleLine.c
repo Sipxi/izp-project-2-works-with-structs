@@ -1,7 +1,15 @@
 #include <stdio.h>
-#include "string.h"
-#include "stdbool.h"
 #include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
+#include <unistd.h>
+
+typedef struct
+{
+    int rows;
+    int columns;
+    char *data;
+} Bitmap;
 
 typedef enum
 {
@@ -16,24 +24,21 @@ typedef enum
 
 typedef struct
 {
-    int row;
-    int col;
-    int color;
-} Pixel;
-
-typedef struct
-{
     char *name;
     MODE mode;
 } ModeMap;
 
-typedef struct
-{
-    int rows;
-    int columns;
-    int **data;
-} Bitmap;
+// Define ANSI color codes
+#define ANSI_RESET "\x1b[0m"
+#define ANSI_RED "\x1b[31m"
+#define ANSI_GREEN "\x1b[32m"
+#define ANSI_YELLOW "\x1b[33m"
 
+// Clear the console screen
+void clearScreen()
+{
+    printf("\033[H\033[J");
+}
 MODE parseUserInput(int argc, char *argv[])
 {
     if (argc < 2 || argc > 3)
@@ -61,7 +66,10 @@ MODE parseUserInput(int argc, char *argv[])
                 return INVALID;
             }
 
-            if (modeMap[i].mode == HLINE || modeMap[i].mode == VLINE || modeMap[i].mode == SQUARE || modeMap[i].mode == TEST)
+            if (modeMap[i].mode == HLINE ||
+                modeMap[i].mode == VLINE ||
+                modeMap[i].mode == SQUARE ||
+                modeMap[i].mode == TEST)
             {
                 if (argc != 3)
                 {
@@ -75,269 +83,387 @@ MODE parseUserInput(int argc, char *argv[])
     return INVALID;
 }
 
-int findLongestLine(Bitmap *bitmap, int start_index[], 
-                    int end_index[], bool search_horizonally, int *start_pointer,
-                    int *end_pointer)
+int getPixelValue(Bitmap *bitmap, int row, int column)
 {
-    int current_length = 0;
-    int longest_length = 0;
-    int end_pos[2] = {-1, -1};
-    int longest_start_pos[2] = {-1, -1};
-    int longest_end_pos[2] = {-1, -1};
-    int start_pos[2] = {-1, -1};
+    return bitmap->data[row * bitmap->columns + column];
+}
 
-    int inner_start = search_horizonally ? start_index[1] : start_index[0];
-    int inner_end = search_horizonally ? end_index[1] : end_index[0];
-    int outer_start = search_horizonally ? start_index[0] : start_index[1];
-    int outer_end = search_horizonally ? end_index[0] : end_index[1];
-
-    for (int i = outer_start; i <= outer_end; i++)
+bool readDimentions(Bitmap *bitmap, FILE *file)
+{
+    // Read dimensions
+    if (fscanf(file, "%d %d", &bitmap->rows, &bitmap->columns) != 2)
     {
-        int found_start = false;
-        for (int j = inner_start; j <= inner_end; j++)
-        {
-            int row = search_horizonally ? i : j;
-            int col = search_horizonally ? j : i;
+        fprintf(stderr, "Failed to read bitmap dimensions\n");
+        fclose(file);
+        return false;
+    }
+    return true;
+}
 
-            if (bitmap->data[row][col] == 1)
+bool readBitmapData(Bitmap *bitmap, FILE *file)
+{
+
+    for (int i = 0; i < bitmap->rows; i++)
+    {
+        for (int j = 0; j < bitmap->columns; j++)
+        {
+            int value;
+            if (fscanf(file, "%d", &value) != 1)
             {
-                if (!found_start)
-                {
-                    current_length = 1;
-                    start_pos[0] = row;
-                    start_pos[1] = col;
-                    found_start = true;
-                }
-                else
-                {
-                    current_length++;
-                }
-                end_pos[0] = row;
-                end_pos[1] = col;
+                fprintf(stderr, "Error: Missing data for specified dimensions.\n");
+                return false;
+            }
+            bitmap->data[i * bitmap->columns + j] = (char)value;
+        }
+    }
+
+    // Check for extra values in the file
+    int extraValue;
+    if (fscanf(file, "%d", &extraValue) == 1)
+    {
+        fprintf(stderr, "Error: Extra data found beyond specified dimensions.\n");
+        return false;
+    }
+
+    return true;
+}
+
+bool validateBitmap(Bitmap *bitmap)
+{
+    for (int i = 0; i < bitmap->rows; i++)
+    {
+        for (int j = 0; j < bitmap->columns; j++)
+        {
+            if (getPixelValue(bitmap, i, j) != 0 && getPixelValue(bitmap, i, j) != 1)
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+// Function to load a bitmap from a file
+bool loadBitmap(const char *filename, Bitmap *bitmap)
+{
+    FILE *file = fopen(filename, "r");
+    if (file == NULL)
+    {
+        fprintf(stderr, "Failed to open file\n");
+        return false;
+    }
+    if (readDimentions(bitmap, file) != true)
+    {
+        fprintf(stderr, "Failed to read bitmap dimensions\n");
+        fclose(file);
+        return false;
+    }
+
+    // Allocate memory for bitmap data
+    bitmap->data = malloc(bitmap->rows * bitmap->columns * sizeof(char));
+    if (bitmap->data == NULL)
+    {
+        fprintf(stderr, "Failed to allocate memory\n");
+        fclose(file);
+        return false;
+    }
+    if (readBitmapData(bitmap, file) != true)
+    {
+        fprintf(stderr, "Failed to read bitmap data\n");
+        free(bitmap->data);
+        fclose(file);
+        return false;
+    }
+
+    fclose(file);
+    return true;
+}
+
+// Print bitmap with live updates
+void printBitmapLive(Bitmap *bitmap, int currentRow, int currentStartCol, int currentEndCol, int line_start[2], int line_end[2])
+{
+    clearScreen();
+    printf("Bitmap (%d x %d):\n", bitmap->rows, bitmap->columns);
+    for (int i = 0; i < bitmap->rows; i++)
+    {
+        for (int j = 0; j < bitmap->columns; j++)
+        {
+            int value = getPixelValue(bitmap, i, j);
+
+            if (i == line_start[0] && j >= line_start[1] && j <= line_end[1])
+            {
+                // Longest horizontal line found so far in green
+                printf(ANSI_GREEN "%d " ANSI_RESET, value);
+            } // Check if this is part of the vertical line
+            else if (j == line_start[1] && i >= line_start[0] && i <= line_end[0])
+            {
+                printf(ANSI_GREEN "%d " ANSI_RESET, value);
+            }
+            else if (i == currentRow && j >= currentStartCol && j <= currentEndCol)
+            {
+                // Current line being evaluated in yellow
+                printf(ANSI_YELLOW "%d " ANSI_RESET, value);
+            }
+            else if (j == currentRow && i >= currentStartCol && i <= currentEndCol)
+            {
+                // Current line being evaluated in yellow
+                printf(ANSI_YELLOW "%d " ANSI_RESET, value);
+            }
+            else if (value == 1)
+            {
+                // Other 1s in red
+                printf(ANSI_RED "%d " ANSI_RESET, value);
             }
             else
             {
-                if (found_start && (current_length > longest_length))
-                {
-                    longest_length = current_length;
-                    longest_start_pos[0] = start_pos[0];
-                    longest_start_pos[1] = start_pos[1];
-                    longest_end_pos[0] = end_pos[0];
-                    longest_end_pos[1] = end_pos[1];
-                }
-                found_start = false;
-                current_length = 0;
+                // Zeros in default color
+                printf("%d ", value);
             }
         }
-        if (found_start && (current_length > longest_length))
-        {
-            longest_length = current_length;
-            longest_start_pos[0] = start_pos[0];
-            longest_start_pos[1] = start_pos[1];
-            longest_end_pos[0] = end_pos[0];
-            longest_end_pos[1] = end_pos[1];
-        }
+        printf("\n");
     }
-
-    // Set start and end pointers before returning
-    start_pointer[0] = longest_start_pos[0];
-    start_pointer[1] = longest_start_pos[1];
-    end_pointer[0] = longest_end_pos[0];
-    end_pointer[1] = longest_end_pos[1];
-
-    return longest_length;
-}
-
-
-void findLongestLineBitmap(Bitmap *bitmap, int *start_position, int *end_position, bool search_horizonally)
-{
-    int longest_length = 0;
-    int current_length = 0;
-    int start_point[2] = {-1, -1};
-    int end_point[2] = {-1, -1};
-    int current_start_pos[2];
-    int current_end_pos[2];
-
-    int outer_loop = search_horizonally ? bitmap->rows : bitmap->columns;
-
-    for (int i = 0; i < outer_loop; i++)
-    {
-        if (search_horizonally)
-        {
-            start_point[0] = i;
-            start_point[1] = 0;
-            end_point[0] = i;
-            end_point[1] = bitmap->columns - 1;
-        }
-        else
-        {
-            start_point[0] = 0;
-            start_point[1] = i;
-            end_point[0] = bitmap->rows - 1;
-            end_point[1] = i;
-        }
-
-        current_length = findLongestLine(bitmap, start_point, end_point, search_horizonally, current_start_pos, current_end_pos);
-
-        if (current_length > longest_length)
-        {
-            longest_length = current_length;
-            start_position[0] = current_start_pos[0];
-            start_position[1] = current_start_pos[1];
-            end_position[0] = current_end_pos[0];
-            end_position[1] = current_end_pos[1];
-        }
-    }
-
-    printf("Longest line is %d, starting at (%d, %d) and ending at (%d, %d).\n",
-           longest_length, start_position[0], start_position[1], end_position[0], end_position[1]);
-}
-
-
-void findHLINE(Bitmap *bitmap, int *start_position, int *end_position)
-{
-    findLongestLineBitmap(bitmap, start_position, end_position, true);
-}
-
-void findVLINE(Bitmap *bitmap, int *start_position, int *end_position)
-{
-    findLongestLineBitmap(bitmap, start_position, end_position, false);
+    usleep(200000); // Pause for 200 milliseconds
 }
 
 /**
  * Frees the memory allocated for a bitmap
+ *
  * @param bitmap The bitmap to free
- * @return void
+ *
+ * This function releases the memory allocated for the bitmap's data and resets
+ * the bitmap's rows and columns to 0
  */
-void free_bitmap(Bitmap *bitmap)
+void freeBitmap(Bitmap *bitmap)
 {
-    // Free each row
-    for (int i = 0; i < bitmap->rows; i++)
-    {
-        free(bitmap->data[i]);
-    }
-    // Free the array of row pointers and the bitmap structure
     free(bitmap->data);
-    free(bitmap);
+    bitmap->data = NULL;
+    bitmap->rows = 0;
+    bitmap->columns = 0;
 }
 
 /**
- * Reads the dimensions of a bitmap from a file
- * @param file The file to read from
- * @param bitmap The bitmap to read into
- * @return true if successful, false if an error occurs
+ * Prints the contents of a bitmap to the console
+ *
+ * @param bitmap The bitmap to print
+ *
+ * This function prints the bitmap's dimensions and then iterates over each pixel,
+ * printing its value to the console
  */
-bool getDimentions(FILE *file, Bitmap *bitmap)
+void printBitmap(Bitmap *bitmap)
 {
-    // Read the first two integers (dimensions) from the file
-    if (fscanf(file, "%d %d", &bitmap->rows, &bitmap->columns) != 2)
-    {
-        printf("Error reading dimensions from file.\n");
-        return false;
-    }
-    return true;
-}
-
-/**
- * Allocates memory for the bitmap data
- * @param bitmap The bitmap to allocate memory for
- * @return true if successful, false if an error occurs
- */
-bool alloc_bitmap_data(Bitmap *bitmap)
-{
-    // Allocate memory for the array of row
-    bitmap->data = (int **)malloc(bitmap->rows * sizeof(int *));
-    if (bitmap->data == NULL)
-    {
-        printf("Memory allocation failed for bitmap rows.\n");
-        return false;
-    }
-
-    // Allocate memory for each column
-    for (int i = 0; i < bitmap->rows; i++)
-    {
-        bitmap->data[i] = (int *)malloc(bitmap->columns * sizeof(int));
-        if (bitmap->data[i] == NULL)
-        {
-            printf("Memory allocation failed for bitmap[%d] columns.\n", i);
-            return false;
-        }
-    }
-    return true;
-}
-
-void findSquare(Bitmap *bitmap, int *start_index, int *end_index)
-{
-
-}
-
-/**
- * Reads the bitmap data from a file
- * @param file The file to read from
- * @param bitmap The bitmap to read into
- * @return true if successful, false if an error occurs
- */
-bool read_bitmap_data(FILE *file, Bitmap *bitmap)
-{
+    printf("Bitmap (%d x %d):\n", bitmap->rows, bitmap->columns);
     for (int i = 0; i < bitmap->rows; i++)
     {
         for (int j = 0; j < bitmap->columns; j++)
         {
-            // Read the data in integer format and store it in the bitmap
-            if (fscanf(file, "%d", &bitmap->data[i][j]) != 1)
+            printf("%d ", getPixelValue(bitmap, i, j));
+        }
+        printf("\n");
+    }
+}
+
+void findHline(Bitmap *bitmap, int found_start_pos[2], int found_end_pos[2])
+{
+    int longest_len = 0;
+    int start_pos[2] = {-1, -1}, end_pos[2] = {-1, -1};
+
+    // Find the longest horizontal line and track its indices
+    for (int row = 0; row < bitmap->rows; row++)
+    {
+        int current_len = 0;
+        int current_start_col = -1;
+        for (int col = 0; col < bitmap->columns; col++)
+        {
+            if (getPixelValue(bitmap, row, col) == 1)
             {
-                printf("Error reading data at (%d, %d) from file.\n", i, j);
-                return false;
+                if (current_len == 0)
+                {
+                    current_start_col = col;
+                }
+                current_len++;
+                if (current_len > longest_len)
+                {
+                    longest_len = current_len;
+                    start_pos[0] = row;
+                    start_pos[1] = current_start_col;
+                    end_pos[0] = row;
+                    end_pos[1] = col;
+                }
             }
-            // Check if the data is valid, 0 or 1
-            if (bitmap->data[i][j] != 0 && bitmap->data[i][j] != 1)
+            else
             {
-                printf("Invalid data at (%d, %d) from file.\n", i, j);
-                return false;
+                current_len = 0;
             }
+            printBitmapLive(bitmap, row, current_start_col, col, start_pos, end_pos);
         }
     }
-    return true;
+    found_start_pos[0] = start_pos[0];
+    found_start_pos[1] = start_pos[1];
+    found_end_pos[0] = end_pos[0];
+    found_end_pos[1] = end_pos[1];
+    printf("Longest horizontal line: %d\n", longest_len);
+    printf("Start position: (%d, %d)\n", start_pos[0], start_pos[1]);
+    printf("End position: (%d, %d)\n", end_pos[0], end_pos[1]);
 }
 
-/**
- * Initializes a bitmap from a file.
- * @param filename The name of the file to read the bitmap from.
- * @return Bitmap* A pointer to the initialized bitmap, or NULL if an error occurs.
- */
-Bitmap *init_bitmap(char *filename)
+void findVline(Bitmap *bitmap, int found_start_pos[2], int found_end_pos[2])
 {
-    // Allocate memory for the bitmap
-    Bitmap *bitmap = malloc(sizeof(Bitmap));
-    if (bitmap == NULL)
-    {
-        printf("Memory allocation failed for Bitmap.\n");
-        return NULL;
-    }
+    int longest_len = 0;
+    int start_pos[2] = {-1, -1}, end_pos[2] = {-1, -1};
 
-    FILE *file = fopen(filename, "r");
-    // Check if the file was successfully parsed
-    if (!getDimentions(file, bitmap) ||
-        !alloc_bitmap_data(bitmap) ||
-        !read_bitmap_data(file, bitmap) ||
-        file == NULL)
+    // Find the longest horizontal line and track its indices
+    for (int col = 0; col < bitmap->columns; col++)
     {
-        // Free the bitmap if there was an error
-        free_bitmap(bitmap);
-        return NULL;
+        int current_len = 0;
+        int current_start_row = -1;
+        for (int row = 0; row < bitmap->rows; row++)
+        {
+            if (getPixelValue(bitmap, row, col) == 1)
+            {
+                if (current_len == 0)
+                {
+                    current_start_row = row;
+                }
+                current_len++;
+                if (current_len > longest_len)
+                {
+                    longest_len = current_len;
+                    start_pos[0] = current_start_row;
+                    start_pos[1] = col;
+                    end_pos[0] = row;
+                    end_pos[1] = col;
+                }
+            }
+            else
+            {
+                current_len = 0;
+            }
+            printBitmapLive(bitmap, col, current_start_row, row, start_pos, end_pos);
+        }
     }
-
-    fclose(file);
-    return bitmap;
+    found_start_pos[0] = start_pos[0];
+    found_start_pos[1] = start_pos[1];
+    found_end_pos[0] = end_pos[0];
+    found_end_pos[1] = end_pos[1];
+    printf("Longest Vertical line: %d\n", longest_len);
+    printf("Start position: (%d, %d)\n", start_pos[0], start_pos[1]);
+    printf("End position: (%d, %d)\n", end_pos[0], end_pos[1]);
 }
 
-void print_bitmap(Bitmap *bitmap)
+bool calculateDiagonals(Bitmap *bitmap, int start_pos[])
 {
+    printf("Start position: (%d, %d)\n", start_pos[0], start_pos[1]);
+    int length = bitmap->rows > bitmap->columns ? bitmap->columns : bitmap->rows;
+    int length_to_go;
+    printf("Length: %d\n", length);
+    for (int i = 0; i < length; i++)
+    {
+        if (getPixelValue(bitmap, start_pos[0] + length - i, start_pos[1] + length - i) == 1)
+        {
+            printf("(%d, %d)\n", start_pos[0] + length - i, start_pos[1] + length - i);
+            length_to_go = (start_pos[0] + length - i) * 2 - 1;
+
+            for (int row = start_pos[0] + length - i; row > 0; row--)
+            {
+                for (int col = start_pos[1] + length - i; col > 0; col--)
+                {
+                    if (getPixelValue(bitmap, row, col) == 1 && getPixelValue(bitmap, col, row) == 1)
+                    {
+                        length_to_go--;
+                        printf("length to go: %d\n", length_to_go);
+                    }
+                    if (length_to_go == 0)
+                    {
+                        printf("Found diagonal\n");
+                        printf("Start position: (%d, %d)\n", start_pos[0], start_pos[1]);
+                        printf("End position: (%d, %d)\n", start_pos[0] + length - i, start_pos[1] + length - i);
+                        return true;
+                    }
+                }
+            }
+        }
+
+        length_to_go = length * 2;
+    }
+    return false;
+}
+
+bool findSquares(Bitmap *bitmap, int found_start_pos[2], int found_end_pos[2])
+{
+    int current_start_row;
+    int current_start_col;
+    int start_pos[2] = {-1, -1}, end_pos[2] = {-1, -1};
+    int current_len;
+    int longest_len = 0;
+    for (int row = 0; row < bitmap->rows-1; row++)
+    {
+        current_start_row = -1;
+        current_start_col = -1;
+        current_len = 0;
+        for (int col = 0; col < bitmap->columns-1; col++)
+        {
+            if ((getPixelValue(bitmap, row, col) == 1) && (getPixelValue(bitmap, col, row) == 1))
+            {
+                if (current_len == 0)
+                {
+                    current_start_row = row;
+                    current_start_col = col;
+                }
+                current_len++;
+                if (current_len > longest_len)
+                {
+                    longest_len = current_len;
+                    start_pos[0] = current_start_row;
+                    start_pos[1] = current_start_col;
+                }
+            }
+            else
+            {
+                current_len = 0;
+            }
+            // printBitmapLive(bitmap, row, current_start_col, col, start_pos, end_pos);
+        }
+    }
+    printf("Longest square: %d\n", longest_len);
+    printf("Longest Start position: (%d, %d)\n", start_pos[0], start_pos[1]);
+    return false;
+}
+
+// Function to print the bitmap with colors
+void printBitmapWithColors(Bitmap *bitmap, int line_start[2], int line_end[2])
+{
+    printf("\nColorful Bitmap (%d x %d):\n", bitmap->rows, bitmap->columns);
+    int pixel_value;
+
     for (int i = 0; i < bitmap->rows; i++)
     {
         for (int j = 0; j < bitmap->columns; j++)
         {
-            printf("%d ", bitmap->data[i][j]);
+            pixel_value = getPixelValue(bitmap, i, j);
+
+            // Check if this is part of the horizontal line
+            if (i == line_start[0] && j >= line_start[1] && j <= line_end[1])
+            {
+                printf(ANSI_GREEN "%d " ANSI_RESET, pixel_value);
+            }
+            // Check if this is part of the vertical line
+            else if (j == line_start[1] && i >= line_start[0] && i <= line_end[0])
+            {
+                printf(ANSI_GREEN "%d " ANSI_RESET, pixel_value);
+            }
+            else
+            {
+                // Use red for `1` and default for `0`
+                if (pixel_value == 1)
+                {
+                    printf(ANSI_RED "%d " ANSI_RESET, pixel_value);
+                }
+                else
+                {
+                    printf("%d ", pixel_value);
+                }
+            }
         }
         printf("\n");
     }
@@ -345,43 +471,30 @@ void print_bitmap(Bitmap *bitmap)
 
 int main(int argc, char *argv[])
 {
-    MODE mode = parseUserInput(argc, argv);
-    Bitmap *bitmap;
+    Bitmap bitmap;
+    // MODE mode = parseUserInput(argc, argv);
 
-    int start_position[2], end_position[2];
-    switch (mode)
+    // Load the bitmap from the file
+    if (loadBitmap(argv[2], &bitmap) != true)
     {
-    case HLINE:
-        bitmap = init_bitmap(argv[2]);
-        findHLINE(bitmap, start_position, end_position);
-       // printf("Start position: (%d, %d)\n", start_position[0], start_position[1]);
-       // printf("End position: (%d, %d)\n", end_position[0], end_position[1]);
-        break;
-    case VLINE:
-        bitmap = init_bitmap(argv[2]);
-        findVLINE(bitmap, start_position, end_position);
-        printf("Start position: (%d, %d)\n", start_position[0], start_position[1]);
-        printf("End position: (%d, %d)\n", end_position[0], end_position[1]);
-        break;
-    case SQUARE:
-        bitmap = init_bitmap(argv[2]);
-        // findSQUARE(bitmap, start_position, end_position);
-        break;
-    case TEST:
-        bitmap = init_bitmap(argv[2]);
-        print_bitmap(bitmap); // Print the bitmap's 2D array
-        break;
-    case INVALID:
-        printf("Invalid mode.\n");
-        break;
-    case HELP:
-        printf("Usage: figsearch [mode] [filename]\n");
-        break;
+        fprintf(stderr, "Failed to load bitmap: invalid data or dimensions\n");
+        return 1;
     }
-    if(bitmap){
-        free_bitmap(bitmap); // Free the allocated memory
+    if (!validateBitmap(&bitmap))
+    {
+        fprintf(stderr, "Failed to load bitmap: invalid data or dimensions\n");
+        return 1;
     }
 
+    // Print the bitmap
+    printBitmap(&bitmap);
+    int found_start_pos[2], found_end_pos[2];
+
+    findSquares(&bitmap, found_start_pos, found_end_pos);
+    printBitmapWithColors(&bitmap, found_start_pos, found_end_pos);
+
+    // Free the allocated memory
+    freeBitmap(&bitmap);
 
     return 0;
 }

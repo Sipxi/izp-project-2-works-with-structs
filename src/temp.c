@@ -455,6 +455,48 @@ bool validateBitmap(Bitmap *bitmap)
     return true;
 }
 
+
+/*
+// Function to print the bitmap with colors
+void printBitmapWithColors(Bitmap bitmap, Position line_start, Position line_end)
+{
+    printf("\nColorful Bitmap (%d x %d):\n", bitmap.rows, bitmap.columns);
+    int pixel_value;
+
+    for (int i = 0; i < bitmap.rows; i++)
+    {
+        for (int j = 0; j < bitmap.columns; j++)
+        {
+            pixel_value = getValue(bitmap, i, j);
+
+            // Check if this is part of the horizontal line
+            if (i == line_start.row && j >= line_start.col && j <= line_end.col)
+            {
+                printf(ANSI_GREEN "%d " ANSI_RESET, pixel_value);
+            }
+            // Check if this is part of the vertical line
+            else if (j == line_start.col && i >= line_start.row && i <= line_end.row)
+            {
+                printf(ANSI_GREEN "%d " ANSI_RESET, pixel_value);
+            }
+            else
+            {
+                // Use red for `1` and default for `0`
+                if (pixel_value == 1)
+                {
+                    printf(ANSI_RED "%d " ANSI_RESET, pixel_value);
+                }
+                else
+                {
+                    printf("%d ", pixel_value);
+                }
+            }
+        }
+        printf("\n");
+    }
+}
+*/
+
 int main(int argc, char *argv[])
 {
     MODE mode = parseUserInput(argc, argv);

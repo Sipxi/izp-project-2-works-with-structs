@@ -9,12 +9,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-
 #define MIN_REQUIRED_ARGS 2
 #define MAX_ALLOWED_ARGS 3
 #define EXIT_FAILURE 1
 #define EXIT_SUCCESS 0
 #define NOT_FOUND_INDEX 0
+
+
 
 // Define the Bitmap struct
 // Data is stored in 1D array of chars
@@ -31,6 +32,14 @@ typedef struct {
     int col;
 } Position;
 
+// Define the ModeMap struct
+// Maps modes to names
+typedef struct {
+    char *name;
+    MODE mode;
+} ModeMap;
+
+// Enum for args
 typedef enum {
     INVALID = -1,
     HLINE = 0,
@@ -41,12 +50,6 @@ typedef enum {
 
 } MODE;
 
-// Define the ModeMap struct
-// Maps modes to names
-typedef struct {
-    char *name;
-    MODE mode;
-} ModeMap;
 
 /**
  * Parses user input and returns the mode
@@ -176,37 +179,6 @@ bool validateBitmap(Bitmap bitmap) {
 }
 
 /**
- * Loads a bitmap from a file
- * @param bitmap The bitmap
- * @param filename The filename
- */
-bool loadBitmap(Bitmap *bitmap, const char *filename) {
-    FILE *file = fopen(filename, "r");
-    if (file == NULL) {
-        return false;
-    }
-    if (readDimentions(bitmap, file) != true) {
-        fclose(file);
-        return false;
-    }
-
-    // Allocate memory for bitmap data
-    bitmap->data = malloc(bitmap->rows * bitmap->columns * sizeof(char));
-    if (bitmap->data == NULL) {
-        fclose(file);
-        return false;
-    }
-    // Read bitmap data
-    if (readBitmapData(bitmap, file) != true) {
-        free(bitmap->data);
-        fclose(file);
-        return false;
-    }
-    fclose(file);
-    return true;
-}
-
-/**
  * Frees the memory allocated for a bitmap
  * @param bitmap The bitmap to free
  *
@@ -232,6 +204,39 @@ void printBitmap(Bitmap bitmap) {
         printf("\n");
     }
 }
+
+/**
+ * Loads a bitmap from a file
+ * @param bitmap The bitmap
+ * @param filename The filename
+ */
+bool loadBitmap(Bitmap *bitmap, const char *filename) {
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        return false;
+    }
+    if (readDimentions(bitmap, file) != true) {
+        fclose(file);
+        return false;
+    }
+
+    // Allocate memory for bitmap data
+    bitmap->data = malloc(bitmap->rows * bitmap->columns * sizeof(char));
+    if (bitmap->data == NULL) {
+        fclose(file);
+        return false;
+    }
+    // Read bitmap data
+    if (readBitmapData(bitmap, file) != true) {
+        freeBitmap(bitmap);
+        fclose(file);
+        return false;
+    }
+    fclose(file);
+    return true;
+}
+
+
 
 /**
  * Find longest horizontal line in a bitmap
@@ -348,9 +353,9 @@ void findVline(Bitmap bitmap, Position *found_start_pos,
  *
  *
  * This function searches for the largest square in a bitmap by iterating over
- * each pixel and checking for lines horizontally and vertically. It
- * then checks if the area forms a square and updates the starting and ending
- * positions of the largest square found.
+ * each pixel and checking for lines horizontally and vertically.
+ * --->
+ * 
  */
 void findSquare(Bitmap bitmap, Position *found_start_pos,
                 Position *found_end_pos) {

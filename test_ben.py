@@ -35,7 +35,7 @@ def benchmark():
     os.makedirs("target", exist_ok=True)
 
     # List of different grid sizes (larger sizes to slow down the C program)
-    sizes = [(100, 100), (200, 200), (300, 300), (400, 400), (500, 500)]  # Larger grids
+    sizes = [(1000, 1000), (2000, 2000), (3000, 3000), (4000, 4000), (5000, 5000)]  # Larger grids
 
     # Time dictionaries for each parameter
     times_square = []

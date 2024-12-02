@@ -15,7 +15,16 @@
 #define EXIT_SUCCESS 0
 #define NOT_FOUND_INDEX 0
 
+// Enum for args
+typedef enum {
+    INVALID,
+    HLINE,
+    VLINE,
+    SQUARE,
+    HELP,
+    TEST
 
+} MODE;
 
 // Define the Bitmap struct
 // Data is stored in 1D array of chars
@@ -38,18 +47,6 @@ typedef struct {
     char *name;
     MODE mode;
 } ModeMap;
-
-// Enum for args
-typedef enum {
-    INVALID = -1,
-    HLINE = 0,
-    VLINE = 1,
-    SQUARE = 2,
-    HELP = 3,
-    TEST = 4
-
-} MODE;
-
 
 /**
  * Parses user input and returns the mode
@@ -166,15 +163,17 @@ bool validateBitmap(Bitmap bitmap) {
     if (bitmap.rows <= 0 || bitmap.columns <= 0) {
         return false;
     }
+    int color;
 
-    for (int row = 0; row < bitmap.rows; row++) {
-        for (int col = 0; col < bitmap.columns; col++) {
-            if (getValue(bitmap, row, col) != 0 &&
-                getValue(bitmap, row, col) != 1) {
+    for (int row = 0; row < bitmap.rows; ++row) {
+        for (int col = 0; col < bitmap.columns; ++col) {
+            color = getValue(bitmap, row, col);
+            if (color != 0 && color != 1) {
                 return false;
             }
         }
     }
+
     return true;
 }
 
@@ -186,6 +185,8 @@ bool validateBitmap(Bitmap bitmap) {
  * the bitmap's rows and columns to 0
  */
 void freeBitmap(Bitmap *bitmap) {
+    if (bitmap == NULL) return;
+
     free(bitmap->data);
     bitmap->data = NULL;
     bitmap->rows = 0;
@@ -236,49 +237,36 @@ bool loadBitmap(Bitmap *bitmap, const char *filename) {
     return true;
 }
 
-
-
 /**
  * Find longest horizontal line in a bitmap
  * @param bitmap The bitmap in which to search
- * @param found_start_pos output parameter for the starting position of the
- * longest line
- * @param found_end_pos output parameter for the ending position of the longest
- * line.
- *
- * This function searches for the longest horizontal line in a bitmap.
- * Updates the output positions.
+ * @param start_pos output parameter for the starting position of the longest
+ * line
+ * @param end_pos output parameter for the ending position of the longest line
  */
-void findHline(Bitmap bitmap, Position *found_start_pos,
-               Position *found_end_pos) {
-    // Initialize variables
-    int longest_len = 0;
-    Position start_pos;
-    Position end_pos;
-    start_pos.row = -1;
-    start_pos.col = -1;
-    end_pos.row = -1;
-    end_pos.col = -1;
+void findHline(Bitmap bitmap, Position *start_pos, Position *end_pos) {
+    int max_len = 0;
+    Position start = {-1, -1};
+    Position end = {-1, -1};
 
     for (int row = 0; row < bitmap.rows; row++) {
         int current_len = 0;
-        int current_start_col = -1;
+        int current_col_start = -1;
 
         for (int col = 0; col < bitmap.columns; col++) {
             if (getValue(bitmap, row, col) == 1) {
                 // Check if this is the start of a new line
                 if (current_len == 0) {
-                    current_start_col = col;
+                    current_col_start = col;
                 }
                 current_len++;
-                // Check if this line is longer than the longest
-                if (current_len > longest_len) {
-                    // Update the longest line and its indices
-                    longest_len = current_len;
-                    start_pos.row = row;
-                    start_pos.col = current_start_col;
-                    end_pos.row = row;
-                    end_pos.col = col;
+                // Check if this is the longest line
+                if (current_len > max_len) {
+                    max_len = current_len;
+                    start.row = row;
+                    start.col = current_col_start;
+                    end.row = row;
+                    end.col = col;
                 }
             } else {
                 current_len = 0;
@@ -286,8 +274,8 @@ void findHline(Bitmap bitmap, Position *found_start_pos,
         }
     }
     // Update the output positions
-    updatePos(&start_pos, found_start_pos);
-    updatePos(&end_pos, found_end_pos);
+    updatePos(&start, start_pos);
+    updatePos(&end, end_pos);
 }
 
 /**
@@ -295,22 +283,17 @@ void findHline(Bitmap bitmap, Position *found_start_pos,
  * @param bitmap The bitmap in which to search
  * @param found_start_pos output parameter for the starting position of the
  * longest line
- * @param found_end_pos output parameter for the ending position of the longest
- * line.
- *
- * This function searches for the longest vertical line in a bitmap.
- * Updates the output positions.
+ * @param found_end_pos output parameter for the ending position of the longest line
+ * @param bitmap The bitmap in which to search
+ * This function searches for the longest vertical line in a bitmap
+ * Updates the output positions
  */
 void findVline(Bitmap bitmap, Position *found_start_pos,
                Position *found_end_pos) {
     // Initialize variables
     int longest_len = 0;
-    Position start_pos;
-    Position end_pos;
-    start_pos.row = -1;
-    start_pos.col = -1;
-    end_pos.row = -1;
-    end_pos.col = -1;
+    Position start_pos = {-1, -1};
+    Position end_pos = {-1, -1};
 
     for (int col = 0; col < bitmap.columns; col++) {
         int current_len = 0;
@@ -330,6 +313,8 @@ void findVline(Bitmap bitmap, Position *found_start_pos,
                     end_pos.row = row;
                     end_pos.col = col;
                 } else if (current_len == longest_len) {
+                    // If the current line is as long as the longest line
+                    // save the one with the smallest starting row
                     if (row < end_pos.row) {
                         start_pos.row = current_start_row;
                         start_pos.col = col;
@@ -349,13 +334,17 @@ void findVline(Bitmap bitmap, Position *found_start_pos,
 
 /**
  * Finds the largest square in a bitmap
- * @param bitmap The bitmap to search.
- *
+ * @param bitmap The bitmap to search
  *
  * This function searches for the largest square in a bitmap by iterating over
- * each pixel and checking for lines horizontally and vertically.
- * --->
- * 
+ * each pixel and checking for lines horizontally and vertically
+ *          idx
+ *      - - - - →
+ *  jdx |
+ *      |
+ *      |
+ *      ↓
+ * then connect with sqr_col and sqr_row
  */
 void findSquare(Bitmap bitmap, Position *found_start_pos,
                 Position *found_end_pos) {
@@ -363,7 +352,7 @@ void findSquare(Bitmap bitmap, Position *found_start_pos,
     Position square_end = {NOT_FOUND_INDEX, NOT_FOUND_INDEX};
     Position end_pos = {NOT_FOUND_INDEX, NOT_FOUND_INDEX};
     int longest_len = 0, current_len = 0;
-    bool isSquare = false, initialSquare = false;
+    bool is_square = false, initial_square = false;
 
     // Loop through all possible starting points
     for (int row = 0; row < bitmap.rows; row++) {
@@ -374,10 +363,12 @@ void findSquare(Bitmap bitmap, Position *found_start_pos,
             // Try to expand the square from the current starting point
             end_pos.row = col;
             end_pos.col = row;
-            if (!initialSquare) {
-                square_start.row = row; square_start.col = col;
-                square_end.row = end_pos.col; square_end.col = end_pos.row;
-                initialSquare = true;
+            if (!initial_square) {
+                square_start.row = row;
+                square_start.col = col;
+                square_end.row = end_pos.col;
+                square_end.col = end_pos.row;
+                initial_square = true;
             }
 
             for (int idx = col, j_idx = row;
@@ -389,18 +380,18 @@ void findSquare(Bitmap bitmap, Position *found_start_pos,
                 }
                 // Check if it forms a square
 
-                isSquare = true;
+                is_square = true;
                 for (int sqr_col = col, sqr_row = row;
                      sqr_col <= idx && sqr_row <= j_idx; sqr_col++, sqr_row++) {
                     if (!getValue(bitmap, j_idx, sqr_col) ||
                         !getValue(bitmap, sqr_row, idx)) {
-                        isSquare = false;
+                        is_square = false;
                         break;
                     }
                 }
 
                 // If a square is found, update the end positions
-                if (isSquare) {
+                if (is_square) {
                     end_pos.row = idx;
                     end_pos.col = j_idx;
                 }
@@ -410,8 +401,10 @@ void findSquare(Bitmap bitmap, Position *found_start_pos,
             current_len = end_pos.row - col;
             if (current_len > longest_len) {
                 // Update largest square if the current one is larger
-                square_start.row = row; square_start.col = col;
-                square_end.row = end_pos.col; square_end.col = end_pos.row;
+                square_start.row = row;
+                square_start.col = col;
+                square_end.row = end_pos.col;
+                square_end.col = end_pos.row;
                 longest_len = current_len;
             }
         }
@@ -441,7 +434,7 @@ void displayHelp() {
  * @param found_start_pos output parameter for the starting position of the
  * longest line
  * @param found_end_pos output parameter for the ending position of the longest
- * line.
+ * line
  */
 void handleMode(MODE mode, Bitmap bitmap, Position *found_start_pos,
                 Position *found_end_pos) {

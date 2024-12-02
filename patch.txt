@@ -1,0 +1,191 @@
+commit 96e3773a81359ddb064f2f5586e3092d2633d119
+Author: Sipxi <sipxi@email.cz>
+Date:   Thu Nov 28 01:26:50 2024 +0100
+
+    cleaned
+
+diff --git a/.vscode/settings.json b/.vscode/settings.json
+new file mode 100644
+index 0000000..1992e5c
+--- /dev/null
++++ b/.vscode/settings.json
+@@ -0,0 +1,5 @@
++{
++    "files.associations": {
++        "unistd.h": "c"
++    }
++}
+\ No newline at end of file
+diff --git a/benchmark_plot.png b/benchmark_plot.png
+index 2221d2f..b4f53bd 100644
+Binary files a/benchmark_plot.png and b/benchmark_plot.png differ
+diff --git a/figsearch b/figsearch
+new file mode 100755
+index 0000000..7ffdf62
+Binary files /dev/null and b/figsearch differ
+diff --git a/figsearch.exe b/figsearch.exe
+deleted file mode 100644
+index 317b948..0000000
+Binary files a/figsearch.exe and /dev/null differ
+diff --git a/src/benchmark_plot.png b/src/benchmark_plot.png
+deleted file mode 100644
+index 1c5dd48..0000000
+Binary files a/src/benchmark_plot.png and /dev/null differ
+diff --git a/src/cloc.exe b/src/cloc.exe
+deleted file mode 100644
+index 51075a4..0000000
+Binary files a/src/cloc.exe and /dev/null differ
+diff --git a/src/figsearch.c b/src/figsearch.c
+index f0bdb83..89a6e7a 100644
+--- a/src/figsearch.c
++++ b/src/figsearch.c
+@@ -9,13 +9,14 @@
+ #include <stdlib.h>
+ #include <string.h>
+ 
+-
+ #define MIN_REQUIRED_ARGS 2
+ #define MAX_ALLOWED_ARGS 3
+ #define EXIT_FAILURE 1
+ #define EXIT_SUCCESS 0
+ #define NOT_FOUND_INDEX 0
+ 
++
++
+ // Define the Bitmap struct
+ // Data is stored in 1D array of chars
+ typedef struct {
+@@ -31,6 +32,14 @@ typedef struct {
+     int col;
+ } Position;
+ 
++// Define the ModeMap struct
++// Maps modes to names
++typedef struct {
++    char *name;
++    MODE mode;
++} ModeMap;
++
++// Enum for args
+ typedef enum {
+     INVALID = -1,
+     HLINE = 0,
+@@ -41,12 +50,6 @@ typedef enum {
+ 
+ } MODE;
+ 
+-// Define the ModeMap struct
+-// Maps modes to names
+-typedef struct {
+-    char *name;
+-    MODE mode;
+-} ModeMap;
+ 
+ /**
+  * Parses user input and returns the mode
+@@ -175,6 +178,33 @@ bool validateBitmap(Bitmap bitmap) {
+     return true;
+ }
+ 
++/**
++ * Frees the memory allocated for a bitmap
++ * @param bitmap The bitmap to free
++ *
++ * This function releases the memory allocated for the bitmap's data and resets
++ * the bitmap's rows and columns to 0
++ */
++void freeBitmap(Bitmap *bitmap) {
++    free(bitmap->data);
++    bitmap->data = NULL;
++    bitmap->rows = 0;
++    bitmap->columns = 0;
++}
++
++/**
++ * Prints the contents of a bitmap to the console
++ * @param bitmap The bitmap to print
++ */
++void printBitmap(Bitmap bitmap) {
++    for (int row = 0; row < bitmap.rows; row++) {
++        for (int col = 0; col < bitmap.columns; col++) {
++            printf("%d ", getValue(bitmap, row, col));
++        }
++        printf("\n");
++    }
++}
++
+ /**
+  * Loads a bitmap from a file
+  * @param bitmap The bitmap
+@@ -198,7 +228,7 @@ bool loadBitmap(Bitmap *bitmap, const char *filename) {
+     }
+     // Read bitmap data
+     if (readBitmapData(bitmap, file) != true) {
+-        free(bitmap->data);
++        freeBitmap(bitmap);
+         fclose(file);
+         return false;
+     }
+@@ -206,32 +236,7 @@ bool loadBitmap(Bitmap *bitmap, const char *filename) {
+     return true;
+ }
+ 
+-/**
+- * Frees the memory allocated for a bitmap
+- * @param bitmap The bitmap to free
+- *
+- * This function releases the memory allocated for the bitmap's data and resets
+- * the bitmap's rows and columns to 0
+- */
+-void freeBitmap(Bitmap *bitmap) {
+-    free(bitmap->data);
+-    bitmap->data = NULL;
+-    bitmap->rows = 0;
+-    bitmap->columns = 0;
+-}
+ 
+-/**
+- * Prints the contents of a bitmap to the console
+- * @param bitmap The bitmap to print
+- */
+-void printBitmap(Bitmap bitmap) {
+-    for (int row = 0; row < bitmap.rows; row++) {
+-        for (int col = 0; col < bitmap.columns; col++) {
+-            printf("%d ", getValue(bitmap, row, col));
+-        }
+-        printf("\n");
+-    }
+-}
+ 
+ /**
+  * Find longest horizontal line in a bitmap
+@@ -348,9 +353,9 @@ void findVline(Bitmap bitmap, Position *found_start_pos,
+  *
+  *
+  * This function searches for the largest square in a bitmap by iterating over
+- * each pixel and checking for lines horizontally and vertically. It
+- * then checks if the area forms a square and updates the starting and ending
+- * positions of the largest square found.
++ * each pixel and checking for lines horizontally and vertically.
++ * --->
++ * 
+  */
+ void findSquare(Bitmap bitmap, Position *found_start_pos,
+                 Position *found_end_pos) {
+diff --git a/target/benchmark_plot.png b/target/benchmark_plot.png
+deleted file mode 100644
+index 474726f..0000000
+Binary files a/target/benchmark_plot.png and /dev/null differ
+diff --git a/test_ben.py b/test_ben.py
+index 177f665..d657541 100644
+--- a/test_ben.py
++++ b/test_ben.py
+@@ -35,7 +35,7 @@ def benchmark():
+     os.makedirs("target", exist_ok=True)
+ 
+     # List of different grid sizes (larger sizes to slow down the C program)
+-    sizes = [(100, 100), (200, 200), (300, 300), (400, 400), (500, 500)]  # Larger grids
++    sizes = [(1000, 1000), (2000, 2000), (3000, 3000), (4000, 4000), (5000, 5000)]  # Larger grids
+ 
+     # Time dictionaries for each parameter
+     times_square = []
